@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Herzfunktion Simulation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #1a1a2e;
+            color: #e94560;
+            margin: 0;
+            padding: 20px;
+        }
+        h2 {
+            color: #fff;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        .math-equation {
+            font-size: 1.2rem;
+            color: #a2a2d0;
+            margin-bottom: 20px;
+        }
+        canvas {
+            background-color: #16213e;
+            border: 2px solid #0f3460;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            max-width: 100%;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            background: #0f3460;
+            padding: 15px 25px;
+            border-radius: 10px;
+        }
+        input[type="range"] {
+            width: 300px;
+            cursor: pointer;
+        }
+        .value-display {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #fff;
+            min-width: 60px;
+        }
+        button {
+            background-color: #e94560;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #ff2a4b;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Dynamische Herz-Kurve</h2>
+    <div class="math-equation">y = x<sup>2/3</sup> + 0,9 · sin(k·x) · &radic;(3 - x<sup>2</sup>)</div>
+
+    <canvas id="graphCanvas" width="600" height="600"></canvas>
+
+    <div class="controls">
+        <label for="kSlider" style="color: #fff;">k-Wert:</label>
+        <input type="range" id="kSlider" min="0" max="200" step="0.1" value="1">
+        <span class="value-display" id="kValue">1.0</span>
+        <button id="animBtn">Animieren ➔</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        const kSlider = document.getElementById('kSlider');
+        const kValue = document.getElementById('kValue');
+        const animBtn = document.getElementById('animBtn');
+
+        // Koordinatensystem-Grenzen (Sichtbereich des Graphen)
+        const minX = -2;
+        const maxX = 2;
+        const minY = -1.5;
+        const maxY = 3.5;
+
+        // Hilfsfunktionen zur Umrechnung von mathematischen Koordinaten in Pixel
+        function mapX(x) {
+            return ((x - minX) / (maxX - minX)) * canvas.width;
+        }
+        function mapY(y) {
+            return canvas.height - ((y - minY) / (maxY - minY)) * canvas.height;
+        }
+
+        // Hauptfunktion zum Zeichnen
+        function drawGraph(k) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Achsen zeichnen
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(mapX(minX), mapY(0)); ctx.lineTo(mapX(maxX), mapY(0)); // X-Achse
+            ctx.moveTo(mapX(0), mapY(minY)); ctx.lineTo(mapX(0), mapY(maxY)); // Y-Achse
+            ctx.stroke();
+
+            // Funktion zeichnen
+            ctx.strokeStyle = '#e94560'; // Pink/Rote Farbe
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+
+            // Der Definitionsbereich der Wurzel √(3 - x²) ist x von -√3 bis +√3
+            const limit = Math.sqrt(3);
+            const step = 0.002; // Sehr kleine Schritte für weiche Kurven bei hohem k
+            let firstPoint = true;
+
+            for (let x = -limit; x <= limit; x += step) {
+                // WICHTIG: JavaScript Math.pow hat Probleme mit negativen Basen bei Brüchen.
+                // Da x^(2/3) das Quadrat von x und dann die Kubikwurzel ist, ist das Vorzeichen egal.
+                // Daher nehmen wir den Betrag: Math.abs(x)
+                let term1 = Math.pow(Math.abs(x), 2/3);
+                let term2 = 0.9 * Math.sin(k * x) * Math.sqrt(3 - x * x);
+                let y = term1 + term2;
+
+                const pixelX = mapX(x);
+                const pixelY = mapY(y);
+
+                if (firstPoint) {
+                    ctx.moveTo(pixelX, pixelY);
+                    firstPoint = false;
+                } else {
+                    ctx.lineTo(pixelX, pixelY);
+                }
+            }
+            ctx.stroke();
+        }
+
+        // Event-Listener für den Slider
+        kSlider.addEventListener('input', (e) => {
+            const k = parseFloat(e.target.value);
+            kValue.textContent = k.toFixed(1);
+            drawGraph(k);
+        });
+
+        // Animations-Logik
+        let animationId;
+        let isAnimating = false;
+        let currentK = parseFloat(kSlider.value);
+
+        animBtn.addEventListener('click', () => {
+            if (isAnimating) {
+                cancelAnimationFrame(animationId);
+                animBtn.textContent = 'Animieren ➔';
+                isAnimating = false;
+            } else {
+                animBtn.textContent = 'Stoppen ⏸';
+                isAnimating = true;
+                currentK = parseFloat(kSlider.value);
+                animate();
+            }
+        });
+
+        function animate() {
+            // Geschwindigkeit der Animation (wird abnehmend, je höher k, da hohe k-Werte wild oszillieren)
+            let speed = currentK < 20 ? 0.05 : 0.2; 
+            currentK += speed;
+            
+            if (currentK > parseFloat(kSlider.max)) {
+                currentK = 0; // Zurücksetzen, wenn Max erreicht
+            }
+            
+            kSlider.value = currentK;
+            kValue.textContent = currentK.toFixed(1);
+            drawGraph(currentK);
+            
+            if (isAnimating) {
+                animationId = requestAnimationFrame(animate);
+            }
+        }
+
+        // Initiales Zeichnen beim Laden der Seite
+        drawGraph(parseFloat(kSlider.value));
+    </script>
+
+</body>
+</html>
